@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GestureDraw</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #2a2a3a;
+    --accent: #7c6dfa;
+    --accent2: #fa6d8f;
+    --green: #6dfaaa;
+    --amber: #fac96d;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--accent2); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .gesture-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    transition: all 0.2s;
+    min-width: 140px;
+    justify-content: center;
+  }
+
+  .gesture-badge.hover   { border-color: var(--muted); color: var(--muted); background: #6b6b8015; }
+  .gesture-badge.draw    { border-color: var(--accent); color: var(--accent); background: #7c6dfa15; }
+  .gesture-badge.erase   { border-color: var(--accent2); color: var(--accent2); background: #fa6d8f15; }
+  .gesture-badge.zoom_in { border-color: var(--green); color: var(--green); background: #6dfaaa15; }
+  .gesture-badge.zoom_out{ border-color: var(--amber); color: var(--amber); background: #fac96d15; }
+  .gesture-badge.pan_start { border-color: #6dc8fa; color: #6dc8fa; background: #6dc8fa15; }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.danger:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .workspace {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .sidebar {
+    width: 200px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-section { display: flex; flex-direction: column; gap: 8px; }
+
+  .sidebar-label {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+  }
+
+  .color-swatch {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s, border-color 0.1s;
+  }
+
+  .color-swatch:hover { transform: scale(1.1); }
+  .color-swatch.active { border-color: white; }
+
+  .brush-sizes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .size-btn {
+    border-radius: 50%;
+    background: var(--text);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  .size-btn.active { box-shadow: 0 0 0 2px var(--accent); }
+  .size-btn:hover { transform: scale(1.15); }
+
+  .gesture-guide {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .guide-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 5px 0;
+    border-bottom: 1px solid #1a1a26;
+  }
+
+  .guide-icon {
+    font-size: 16px;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .canvas-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 20% 20%, #7c6dfa08 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, #fa6d8f06 0%, transparent 50%),
+      var(--bg);
+  }
+
+  /* dot grid */
+  .canvas-area::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, #2a2a3a 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #drawCanvas {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    cursor: none;
+  }
+
+  #webcamContainer {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 200px;
+    height: 150px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    z-index: 10;
+    background: #000;
+  }
+
+  #webcam {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+
+  #landmarkCanvas {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    transform: scaleX(-1);
+  }
+
+  .webcam-label {
+    position: absolute;
+    bottom: 6px;
+    left: 8px;
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    z-index: 3;
+  }
+
+  .cursor-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    pointer-events: none;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+    display: none;
+    transition: background 0.1s, border-color 0.1s, width 0.1s, height 0.1s;
+  }
+
+  .cursor-dot.drawing {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .cursor-dot.erase {
+    width: 40px; height: 40px;
+    border-color: var(--accent2);
+    background: #fa6d8f18;
+  }
+
+  .zoom-indicator {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 3px 12px;
+    border-radius: 100px;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  #startBtn {
+    font-size: 13px;
+    padding: 8px 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+  }
+
+  #startBtn:hover { background: #6a5ce8; color: white; }
+
+  .info-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: #0a0a0f99;
+    backdrop-filter: blur(4px);
+  }
+
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 360px;
+    text-align: center;
+  }
+
+  .info-card h2 {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .info-card p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Gesture<span>Draw</span></div>
+  <div class="status-bar">
+    <div class="gesture-badge" id="gestureBadge"><div class="dot"></div> <span id="gestureLabel">waiting...</span></div>
+  </div>
+  <div class="controls">
+    <button id="startBtn">Start Camera</button>
+    <button class="danger" id="clearBtn">Clear</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Color</div>
+      <div class="color-grid" id="colorGrid"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Brush Size</div>
+      <div class="brush-sizes" id="brushSizes"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Gestures</div>
+      <div class="gesture-guide">
+        <div class="guide-item"><span class="guide-icon">☝️</span> Index only = Draw</div>
+        <div class="guide-item"><span class="guide-icon">✌️</span> Index + Middle = Erase</div>
+        <div class="guide-item"><span class="guide-icon">🤟</span> Both L-hands apart = Zoom in</div>
+        <div class="guide-item"><span class="guide-icon">🤟</span> Both L-hands close = Zoom out</div>
+        <div class="guide-item"><span class="guide-icon">✊</span> Open→Fist = Grab &amp; Pan</div>
+        <div class="guide-item"><span class="guide-icon">🖐️</span> Fist→Open = Release pan</div>
+        <div class="guide-item"><span class="guide-icon">🤲</span> Works with BOTH hands!</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="canvas-area" id="canvasArea">
+    <canvas id="drawCanvas"></canvas>
+    <div class="cursor-dot" id="cursorDot"></div>
+    <div class="zoom-indicator" id="zoomIndicator">100%</div>
+
+    <div id="webcamContainer">
+      <video id="webcam" autoplay playsinline muted></video>
+      <canvas id="landmarkCanvas"></canvas>
+      <div class="webcam-label">LIVE</div>
+    </div>
+
+    <div class="info-overlay" id="infoOverlay">
+      <div class="info-card">
+        <h2>GestureDraw</h2>
+        <p>Draw, erase, zoom and pan using only your hand gestures in front of your webcam. No mouse needed.</p>
+        <button id="startBtn2" style="font-size:13px;padding:10px 28px;background:var(--accent);color:white;border:none;border-radius:10px;cursor:pointer;">Enable Camera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const COLORS = ['#e8e8f0','#7c6dfa','#fa6d8f','#6dfaaa','#fac96d','#6dc8fa','#fa9b6d','#d46dfa','#ff4444','#ffffff'];
+const SIZES  = [3, 6, 12, 20];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let currentColor = COLORS[1];
+let currentSize  = 6;
+let zoom = 1, panX = 0, panY = 0;          // viewport transform
+let panState = 'idle';                      // 'idle' | 'panning'
+let panStartX = 0, panStartY = 0;          // palm center when fist formed
+let panOriginX = 0, panOriginY = 0;        // panX/Y snapshot when fist formed
+let prevZoomDist = null;                    // two-hand zoom distance
+let lastGesture = 'none';
+let drawState = {};                         // per-hand { drawing, lastX, lastY }
+
+// ─── OFFSCREEN DRAWING CANVAS ────────────────────────────────────────────────
+// We draw strokes/erase onto a large offscreen canvas (4000×3000).
+// The visible drawCanvas composites it using CSS transform (pan+zoom),
+// so pan/zoom are instant — no re-render needed.
+const OFF_W = 4000, OFF_H = 3000;
+const offCanvas = document.createElement('canvas');
+offCanvas.width  = OFF_W;
+offCanvas.height = OFF_H;
+const offCtx = offCanvas.getContext('2d');
+
+// ─── DOM ──────────────────────────────────────────────────────────────────────
+const canvasArea    = document.getElementById('canvasArea');
+const drawCanvas    = document.getElementById('drawCanvas');
+const drawCtx       = drawCanvas.getContext('2d');
+const lmCanvas      = document.getElementById('landmarkCanvas');
+const lmCtx         = lmCanvas.getContext('2d');
+const cursorDot     = document.getElementById('cursorDot');
+const gestureBadge  = document.getElementById('gestureBadge');
+const gestureLabel  = document.getElementById('gestureLabel');
+const zoomIndicator = document.getElementById('zoomIndicator');
+const webcam        = document.getElementById('webcam');
+const infoOverlay   = document.getElementById('infoOverlay');
+
+// Second cursor for second hand
+const cursorDot2 = document.createElement('div');
+cursorDot2.className = 'cursor-dot';
+cursorDot2.style.cssText = 'display:none; border-color:#fa6d8f;';
+canvasArea.appendChild(cursorDot2);
+
+// ─── CANVAS RESIZE ───────────────────────────────────────────────────────────
+function resizeCanvas() {
+  const { width, height } = canvasArea.getBoundingClientRect();
+  drawCanvas.width  = width;
+  drawCanvas.height = height;
+  renderOffscreen();
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Blit offscreen → visible canvas every frame, applying pan+zoom via drawImage
+function renderOffscreen() {
+  const { width, height } = canvasArea.getBoundingClientRect();
+  drawCtx.clearRect(0, 0, width, height);
+  drawCtx.drawImage(offCanvas, panX, panY, OFF_W * zoom, OFF_H * zoom);
+}
+
+// ─── UI SETUP ────────────────────────────────────────────────────────────────
+document.getElementById('colorGrid');
+COLORS.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'color-swatch' + (i === 1 ? ' active' : '');
+  sw.style.background = c;
+  sw.addEventListener('click', () => {
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+    currentColor = c;
+  });
+  document.getElementById('colorGrid').appendChild(sw);
+});
+
+SIZES.forEach((s, i) => {
+  const btn = document.createElement('div');
+  btn.className = 'size-btn' + (i === 1 ? ' active' : '');
+  btn.style.width = btn.style.height = (s * 1.5 + 10) + 'px';
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSize = s;
+  });
+  document.getElementById('brushSizes').appendChild(btn);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  offCtx.clearRect(0, 0, OFF_W, OFF_H);
+  zoom = 1; panX = 0; panY = 0;
+  zoomIndicator.textContent = '100%';
+  renderOffscreen();
+});
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function showGesture(g, label) {
+  if (g === lastGesture) return;
+  lastGesture = g;
+  gestureBadge.className = 'gesture-badge ' + g;
+  gestureLabel.textContent = label;
+}
+
+// Convert landmark normalized (0-1) to screen pixels (mirrored X)
+function lmToScreen(lm, i) {
+  const { width, height } = canvasArea.getBoundingClientRect();
+  return { x: (1 - lm[i].x) * width, y: lm[i].y * height };
+}
+
+// Convert screen px → offscreen canvas px (accounting for pan+zoom)
+function screenToOff(sx, sy) {
+  return { x: (sx - panX) / zoom, y: (sy - panY) / zoom };
+}
+
+// Palm center: average of wrist + 4 MCP joints
+function palmScreen(lm) {
+  const { width, height } = canvasArea.getBoundingClientRect();
+  const pts = [0,5,9,13,17];
+  let ax=0, ay=0;
+  pts.forEach(i => { ax += lm[i].x; ay += lm[i].y; });
+  return { x: (1 - ax/pts.length)*width, y: ay/pts.length*height };
+}
+
+// Finger detection
+function fingersUp(lm) {
+  // [index, middle, ring, pinky]
+  return [8,12,16,20].map((tip,i) => lm[tip].y < lm[[6,10,14,18][i]].y);
+}
+
+function isFist(lm) {
+  // All 4 fingertips curled below their MCP knuckles
+  return [8,12,16,20].every((tip,i) => lm[tip].y > lm[[5,9,13,17][i]].y);
+}
+
+function isOpenPalm(lm) {
+  const [i,m,r,p] = fingersUp(lm);
+  return i && m && r && p;
+}
+
+// ─── PER-HAND GESTURE PROCESSOR ──────────────────────────────────────────────
+function processHand(lm, handIdx) {
+  if (!drawState[handIdx]) drawState[handIdx] = { drawing: false, lastX: 0, lastY: 0 };
+  const st = drawState[handIdx];
+  const cursor = handIdx === 0 ? cursorDot : cursorDot2;
+
+  const [idx, mid, ring, pinky] = fingersUp(lm);
+  const tipScr  = lmToScreen(lm, 8);   // index fingertip
+  const midScr  = lmToScreen(lm, 12);  // middle fingertip
+  const palm    = palmScreen(lm);
+  const fist    = isFist(lm);
+  const open    = isOpenPalm(lm);
+
+  // Always show cursor at index tip
+  cursor.style.display = 'block';
+  cursor.style.left = tipScr.x + 'px';
+  cursor.style.top  = tipScr.y + 'px';
+
+  // ── PAN: fist = grab, open palm = release ──────────────────────────────────
+  if (panState === 'idle' && fist) {
+    panState   = 'panning';
+    panStartX  = palm.x; panStartY  = palm.y;
+    panOriginX = panX;   panOriginY = panY;
+    st.drawing = false;
+    cursor.className = 'cursor-dot';
+    showGesture('pan_start', '✊ panning');
+    return;
+  }
+  if (panState === 'panning') {
+    if (open) {
+      panState = 'idle';
+      showGesture('pan_release', 'pan released');
+      cursor.className = 'cursor-dot';
+      return;
+    }
+    // Move: update pan, re-render offscreen
+    panX = panOriginX + (palm.x - panStartX);
+    panY = panOriginY + (palm.y - panStartY);
+    renderOffscreen();
+    st.drawing = false;
+    cursor.className = 'cursor-dot';
+    showGesture('pan_start', '✊ panning');
+    return;
+  }
+
+  // ── ERASE: index + middle up, ring + pinky down ────────────────────────────
+  if (idx && mid && !ring && !pinky) {
+    st.drawing = false;
+    const ex = (tipScr.x + midScr.x) / 2;
+    const ey = (tipScr.y + midScr.y) / 2;
+    const off = screenToOff(ex, ey);
+    // Erase radius scales with zoom so it feels consistent
+    const r = Math.max(18, 28 / zoom);
+    offCtx.save();
+    offCtx.globalCompositeOperation = 'destination-out';
+    offCtx.beginPath();
+    offCtx.arc(off.x, off.y, r, 0, Math.PI * 2);
+    offCtx.fillStyle = 'rgba(0,0,0,1)';
+    offCtx.fill();
+    offCtx.restore();
+    renderOffscreen();
+    showGesture('erase', '✌️ erasing');
+    cursor.className = 'cursor-dot erase';
+    cursor.style.left = ex + 'px';
+    cursor.style.top  = ey + 'px';
+    return;
+  }
+
+  // ── DRAW: only index up ────────────────────────────────────────────────────
+  if (idx && !mid && !ring && !pinky) {
+    const off = screenToOff(tipScr.x, tipScr.y);
+    offCtx.globalCompositeOperation = 'source-over';
+    offCtx.strokeStyle = currentColor;
+    offCtx.lineWidth   = currentSize / zoom;   // consistent visual width
+    offCtx.lineCap     = 'round';
+    offCtx.lineJoin    = 'round';
+    if (!st.drawing) {
+      offCtx.beginPath();
+      offCtx.moveTo(off.x, off.y);
+      st.drawing = true;
+    } else {
+      offCtx.lineTo(off.x, off.y);
+      offCtx.stroke();
+    }
+    st.lastX = off.x; st.lastY = off.y;
+    renderOffscreen();
+    showGesture('draw', '☝️ drawing');
+    cursor.className = 'cursor-dot drawing';
+    return;
+  }
+
+  // ── Idle ───────────────────────────────────────────────────────────────────
+  st.drawing = false;
+  cursor.className = 'cursor-dot';
+  showGesture('none', 'none');
+}
+
+// ─── MAIN MEDIAPIPE CALLBACK ──────────────────────────────────────────────────
+function onResults(results) {
+  // Clear landmark overlay
+  lmCanvas.width = 200; lmCanvas.height = 150;
+  lmCtx.clearRect(0, 0, 200, 150);
+
+  const hands = results.multiHandLandmarks || [];
+
+  if (hands.length === 0) {
+    cursorDot.style.display  = 'none';
+    cursorDot2.style.display = 'none';
+    drawState = {};
+    prevZoomDist = null;
+    if (panState === 'panning') panState = 'idle';
+    showGesture('none', 'no hand');
+    return;
+  }
+
+  // Draw skeleton on mini overlay
+  hands.forEach(lm => {
+    drawConnectors(lmCtx, lm, HAND_CONNECTIONS, { color:'#7c6dfa55', lineWidth:1 });
+    drawLandmarks(lmCtx, lm, { color:'#7c6dfa', lineWidth:1, radius:2 });
+  });
+
+  if (hands.length < 2) {
+    cursorDot2.style.display = 'none';
+    if (drawState[1]) drawState[1].drawing = false;
+  }
+
+  // ── TWO-HAND ZOOM: both open palms ────────────────────────────────────────
+  if (hands.length === 2 && isOpenPalm(hands[0]) && isOpenPalm(hands[1])) {
+    // Distance between palm centers
+    const p0 = palmScreen(hands[0]);
+    const p1 = palmScreen(hands[1]);
+    const d  = Math.hypot(p0.x - p1.x, p0.y - p1.y);
+
+    if (prevZoomDist !== null) {
+      const delta = d - prevZoomDist;
+      if (Math.abs(delta) > 2) {            // deadzone 2px to avoid drift
+        const factor = delta > 0 ? 1.03 : 0.97;
+        zoom = Math.min(Math.max(zoom * factor, 0.1), 10);
+        zoomIndicator.textContent = Math.round(zoom * 100) + '%';
+        renderOffscreen();
+        showGesture(delta > 0 ? 'zoom_in' : 'zoom_out',
+                    delta > 0 ? '🖐️ zoom in' : '🖐️ zoom out');
+      }
+    }
+    prevZoomDist = d;
+
+    // Show both cursors at palm centers
+    [cursorDot, cursorDot2].forEach((c, i) => {
+      const p = palmScreen(hands[i]);
+      c.style.display = 'block';
+      c.style.left = p.x + 'px';
+      c.style.top  = p.y + 'px';
+      c.className  = 'cursor-dot';
+    });
+    // Stop any active drawing strokes
+    [0,1].forEach(i => { if (drawState[i]) drawState[i].drawing = false; });
+    return;
+  }
+  prevZoomDist = null;
+
+  // ── PER-HAND DRAW / ERASE / PAN ──────────────────────────────────────────
+  hands.forEach((lm, i) => processHand(lm, i));
+}
+
+// ─── CAMERA START ─────────────────────────────────────────────────────────────
+async function startCamera() {
+  infoOverlay.style.display = 'none';
+  try {
+    const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.75,
+      minTrackingConfidence: 0.7
+    });
+    hands.onResults(onResults);
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    });
+    webcam.srcObject = stream;
+    await webcam.play();
+
+    const camera = new Camera(webcam, {
+      onFrame: async () => { await hands.send({ image: webcam }); },
+      width: 640, height: 480
+    });
+    camera.start();
+  } catch(e) {
+    alert('Camera access denied or MediaPipe failed to load.\n\n' + e.message);
+  }
+}
+
+document.getElementById('startBtn').addEventListener('click', startCamera);
+document.getElementById('startBtn2').addEventListener('click', startCamera);
+</script>
+</body>
+</html>
